@@ -9,6 +9,72 @@ interface UserInfo {
   picture?: string;
 }
 
+// Detect browser type - check for Firefox-specific property
+const isFirefox = typeof window !== 'undefined' &&
+  typeof (window as any).browser !== 'undefined' &&
+  typeof (window as any).InstallTrigger !== 'undefined';
+
+// Cross-browser API helper
+const browserAPI = typeof window !== 'undefined'
+  ? (isFirefox ? (window as any).browser : (window as any).chrome)
+  : null;
+
+// Helper functions for cross-browser storage
+async function storageGet(keys: string[]): Promise<Record<string, any>> {
+  if (!browserAPI?.storage?.local) {
+    console.log('Storage API not available');
+    return {};
+  }
+
+  try {
+    if (isFirefox) {
+      // Firefox uses Promise-based API
+      return await browserAPI.storage.local.get(keys);
+    } else {
+      // Chrome uses callback-based API
+      return new Promise((resolve, reject) => {
+        browserAPI.storage.local.get(keys, (result: Record<string, any>) => {
+          if (browserAPI.runtime?.lastError) {
+            reject(browserAPI.runtime.lastError);
+          } else {
+            resolve(result);
+          }
+        });
+      });
+    }
+  } catch (e) {
+    console.log('storageGet error:', e);
+    return {};
+  }
+}
+
+async function storageSet(items: Record<string, any>): Promise<void> {
+  if (!browserAPI?.storage?.local) {
+    console.log('Storage API not available');
+    return;
+  }
+
+  try {
+    if (isFirefox) {
+      // Firefox uses Promise-based API
+      await browserAPI.storage.local.set(items);
+    } else {
+      // Chrome uses callback-based API
+      return new Promise((resolve, reject) => {
+        browserAPI.storage.local.set(items, () => {
+          if (browserAPI.runtime?.lastError) {
+            reject(browserAPI.runtime.lastError);
+          } else {
+            resolve();
+          }
+        });
+      });
+    }
+  } catch (e) {
+    console.log('storageSet error:', e);
+  }
+}
+
 export default function Home() {
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -21,7 +87,7 @@ export default function Home() {
 
   const checkAuthStatus = async () => {
     try {
-      const result = await chrome.storage.local.get(['vv_user', 'vv_signed_in']);
+      const result = await storageGet(['vv_user', 'vv_signed_in']);
       if (result.vv_signed_in && result.vv_user) {
         setIsSignedIn(true);
         setUser(result.vv_user);
@@ -38,46 +104,66 @@ export default function Home() {
   const handleSignIn = async () => {
     setError(null);
     try {
-      // Get OAuth token using chrome.identity
-      const token = await new Promise<string>((resolve, reject) => {
-        chrome.identity.getAuthToken({ interactive: true }, (token) => {
-          if (chrome.runtime.lastError) {
-            reject(chrome.runtime.lastError.message);
-          } else if (token) {
-            resolve(token);
-          } else {
-            reject('No token received');
-          }
+      if (isFirefox) {
+        // Firefox: Use web-based OAuth flow
+        // For now, generate anonymous user ID (full OAuth requires more setup)
+        const userId = 'user_' + Math.random().toString(36).substr(2, 9) + Date.now();
+        const userData: UserInfo = {
+          id: userId,
+          email: 'anonymous@videovitals.app',
+          name: 'VideoVitals User'
+        };
+
+        await storageSet({
+          vv_user: userData,
+          vv_user_id: userData.id,
+          vv_signed_in: true
         });
-      });
 
-      // Get user info from Google
-      const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+        setIsSignedIn(true);
+        setUser(userData);
+        console.log('Signed in (Firefox):', userData);
+      } else {
+        // Chrome: Use chrome.identity API
+        const token = await new Promise<string>((resolve, reject) => {
+          chrome.identity.getAuthToken({ interactive: true }, (token) => {
+            if (chrome.runtime.lastError) {
+              reject(chrome.runtime.lastError.message);
+            } else if (token) {
+              resolve(token);
+            } else {
+              reject('No token received');
+            }
+          });
+        });
 
-      if (!response.ok) {
-        throw new Error('Failed to get user info');
+        // Get user info from Google
+        const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to get user info');
+        }
+
+        const userInfo = await response.json();
+        const userData: UserInfo = {
+          id: userInfo.id,
+          email: userInfo.email,
+          name: userInfo.name,
+          picture: userInfo.picture
+        };
+
+        await storageSet({
+          vv_user: userData,
+          vv_user_id: userData.id,
+          vv_signed_in: true
+        });
+
+        setIsSignedIn(true);
+        setUser(userData);
+        console.log('Signed in (Chrome):', userData);
       }
-
-      const userInfo = await response.json();
-      const userData: UserInfo = {
-        id: userInfo.id,
-        email: userInfo.email,
-        name: userInfo.name,
-        picture: userInfo.picture
-      };
-
-      // Save to storage
-      await chrome.storage.local.set({
-        vv_user: userData,
-        vv_user_id: userData.id,
-        vv_signed_in: true
-      });
-
-      setIsSignedIn(true);
-      setUser(userData);
-      console.log('Signed in:', userData);
     } catch (e: any) {
       console.log('Sign in error:', e);
       setError(e.toString());
@@ -86,17 +172,19 @@ export default function Home() {
 
   const handleSignOut = async () => {
     try {
-      // Revoke the token
-      chrome.identity.getAuthToken({ interactive: false }, (token) => {
-        if (token) {
-          chrome.identity.removeCachedAuthToken({ token }, () => {
-            console.log('Token removed');
-          });
-        }
-      });
+      // Chrome: Revoke the token
+      if (!isFirefox && chrome?.identity?.getAuthToken) {
+        chrome.identity.getAuthToken({ interactive: false }, (token) => {
+          if (token) {
+            chrome.identity.removeCachedAuthToken({ token }, () => {
+              console.log('Token removed');
+            });
+          }
+        });
+      }
 
       // Clear storage
-      await chrome.storage.local.set({
+      await storageSet({
         vv_user: null,
         vv_user_id: null,
         vv_signed_in: false

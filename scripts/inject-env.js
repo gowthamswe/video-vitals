@@ -1,6 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 
+// Get target browser from command line args (default: chrome)
+const targetBrowser = process.argv[2] || 'chrome';
+console.log(`Building for: ${targetBrowser.toUpperCase()}`);
+
 // Load environment variables from .env.local if it exists
 const envPath = path.join(__dirname, '..', '.env.local');
 const env = {};
@@ -13,6 +17,9 @@ if (fs.existsSync(envPath)) {
       env[key.trim()] = value.trim();
     }
   });
+  console.log('Loaded environment variables from .env.local');
+} else {
+  console.warn('WARNING: .env.local not found - credentials will not be injected!');
 }
 
 // Replace placeholders in content.js
@@ -34,21 +41,52 @@ if (fs.existsSync(contentJsPath)) {
   console.log('Injected environment variables into content.js');
 }
 
-// Replace placeholder in manifest.json for OAuth client ID
-const manifestPath = path.join(__dirname, '..', 'out', 'manifest.json');
-if (fs.existsSync(manifestPath)) {
-  let manifest = fs.readFileSync(manifestPath, 'utf8');
+// Copy the appropriate manifest based on target browser
+const manifestSource = path.join(__dirname, '..', 'public', `manifest.${targetBrowser}.json`);
+const manifestDest = path.join(__dirname, '..', 'out', 'manifest.json');
 
-  if (env.NEXT_PUBLIC_OAUTH_CLIENT_ID) {
+if (fs.existsSync(manifestSource)) {
+  let manifest = fs.readFileSync(manifestSource, 'utf8');
+
+  // For Chrome, inject OAuth client ID
+  if (targetBrowser === 'chrome' && env.NEXT_PUBLIC_OAUTH_CLIENT_ID) {
     manifest = manifest.replace(
       /"client_id":\s*"YOUR_OAUTH_CLIENT_ID_HERE"/,
       `"client_id": "${env.NEXT_PUBLIC_OAUTH_CLIENT_ID}"`
     );
-    fs.writeFileSync(manifestPath, manifest);
     console.log('Injected OAuth client ID into manifest.json');
-  } else {
-    console.warn('WARNING: NEXT_PUBLIC_OAUTH_CLIENT_ID not set in .env.local - OAuth will not work!');
+  }
+
+  fs.writeFileSync(manifestDest, manifest);
+  console.log(`Copied manifest.${targetBrowser}.json to manifest.json`);
+} else {
+  console.warn(`WARNING: manifest.${targetBrowser}.json not found!`);
+}
+
+// Copy browser-polyfill.js to out folder
+const polyfillSource = path.join(__dirname, '..', 'public', 'browser-polyfill.js');
+const polyfillDest = path.join(__dirname, '..', 'out', 'browser-polyfill.js');
+if (fs.existsSync(polyfillSource)) {
+  fs.copyFileSync(polyfillSource, polyfillDest);
+  console.log('Copied browser-polyfill.js to out folder');
+}
+
+// For Firefox, copy the simple popup.html and popup.js (avoids Next.js CSP issues)
+if (targetBrowser === 'firefox') {
+  const popupHtmlSource = path.join(__dirname, '..', 'public', 'popup.html');
+  const popupHtmlDest = path.join(__dirname, '..', 'out', 'popup.html');
+  if (fs.existsSync(popupHtmlSource)) {
+    fs.copyFileSync(popupHtmlSource, popupHtmlDest);
+    console.log('Copied popup.html to out folder');
+  }
+
+  const popupJsSource = path.join(__dirname, '..', 'public', 'popup.js');
+  const popupJsDest = path.join(__dirname, '..', 'out', 'popup.js');
+  if (fs.existsSync(popupJsSource)) {
+    fs.copyFileSync(popupJsSource, popupJsDest);
+    console.log('Copied popup.js to out folder');
   }
 }
 
-console.log('Environment injection complete!');
+console.log(`\n✅ Build complete for ${targetBrowser.toUpperCase()}!`);
+console.log(`Extension is ready in: ${path.join(__dirname, '..', 'out')}`);

@@ -1,4 +1,5 @@
 // VideoVitals - Content Script with Auth + Firebase
+// Cross-browser compatible (Chrome & Firefox)
 // NOTE: Firebase credentials are injected at build time from environment variables
 
 (function() {
@@ -6,6 +7,17 @@
 
   if (window.vvLoaded) return;
   window.vvLoaded = true;
+
+  console.log('[VideoVitals] Content script loaded');
+
+  // Detect browser type
+  const isFirefox = typeof browser !== 'undefined' && typeof InstallTrigger !== 'undefined';
+  const isChrome = !isFirefox && typeof chrome !== 'undefined';
+
+  // Use browser API (Firefox) or chrome API (Chrome)
+  const browserAPI = isFirefox ? browser : chrome;
+
+  console.log('[VideoVitals] Browser detected:', isFirefox ? 'Firefox' : 'Chrome');
 
   // Firebase config - these will be replaced at build time
   // If you're forking this project, set these in your .env.local file
@@ -20,10 +32,57 @@
   let currentVideoId = null;
   let userId = null;
 
+  // Helper to handle storage API differences between Chrome (callback) and Firefox (Promise)
+  async function storageGet(keys) {
+    try {
+      if (isFirefox) {
+        // Firefox uses Promise-based API
+        return await browserAPI.storage.local.get(keys);
+      } else {
+        // Chrome uses callback-based API
+        return new Promise((resolve, reject) => {
+          browserAPI.storage.local.get(keys, (result) => {
+            if (browserAPI.runtime.lastError) {
+              reject(browserAPI.runtime.lastError);
+            } else {
+              resolve(result);
+            }
+          });
+        });
+      }
+    } catch (e) {
+      console.log('[VideoVitals] storageGet error:', e);
+      return {};
+    }
+  }
+
+  async function storageSet(items) {
+    try {
+      if (isFirefox) {
+        // Firefox uses Promise-based API
+        return await browserAPI.storage.local.set(items);
+      } else {
+        // Chrome uses callback-based API
+        return new Promise((resolve, reject) => {
+          browserAPI.storage.local.set(items, () => {
+            if (browserAPI.runtime.lastError) {
+              reject(browserAPI.runtime.lastError);
+            } else {
+              resolve();
+            }
+          });
+        });
+      }
+    } catch (e) {
+      console.log('[VideoVitals] storageSet error:', e);
+    }
+  }
+
   // Check if user is signed in
   async function checkAuth() {
     try {
-      const result = await chrome.storage.local.get(['vv_user_id', 'vv_signed_in']);
+      const result = await storageGet(['vv_user_id', 'vv_signed_in']);
+      console.log('[VideoVitals] Auth check result:', result);
       if (result.vv_signed_in && result.vv_user_id) {
         userId = result.vv_user_id;
         isSignedIn = true;
@@ -40,7 +99,7 @@
   async function signIn() {
     try {
       userId = 'user_' + Math.random().toString(36).substr(2, 9) + Date.now();
-      await chrome.storage.local.set({
+      await storageSet({
         vv_user_id: userId,
         vv_signed_in: true
       });
@@ -60,7 +119,7 @@
     if (userId) return userId;
 
     try {
-      const result = await chrome.storage.local.get(['vv_user_id']);
+      const result = await storageGet(['vv_user_id']);
       if (result.vv_user_id) {
         userId = result.vv_user_id;
       }
@@ -72,7 +131,10 @@
 
   // Firebase REST API - Save rating (fire and forget)
   function syncToFirebase(data) {
-    if (!userId) return;
+    if (!userId || !FIREBASE_PROJECT_ID || !FIREBASE_API_KEY) {
+      console.log('[VideoVitals] Cannot sync - missing userId or Firebase config');
+      return;
+    }
 
     const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/videos/${currentVideoId}/ratings/${userId}?key=${FIREBASE_API_KEY}`;
 
@@ -103,7 +165,10 @@
 
   // Firebase REST API - Load ratings for video
   async function loadFromFirebase() {
-    if (!currentVideoId) return null;
+    if (!currentVideoId || !FIREBASE_PROJECT_ID || !FIREBASE_API_KEY) {
+      console.log('[VideoVitals] Cannot load from Firebase - missing config');
+      return null;
+    }
 
     try {
       const uid = await getUserId();
@@ -154,7 +219,7 @@
 
     // First, load from local storage
     try {
-      const result = await chrome.storage.local.get([`vv_${currentVideoId}`]);
+      const result = await storageGet([`vv_${currentVideoId}`]);
       const data = result[`vv_${currentVideoId}`];
 
       if (data) {
@@ -188,7 +253,7 @@
     if (!currentVideoId) return;
 
     try {
-      await chrome.storage.local.set({
+      await storageSet({
         [`vv_${currentVideoId}`]: {
           isClickbait,
           density
@@ -276,6 +341,7 @@
         background: rgba(255,255,255,0.3);
         outline: none;
         -webkit-appearance: none;
+        -moz-appearance: none;
         appearance: none;
         cursor: pointer;
       }
@@ -287,6 +353,14 @@
         border-radius: 50%;
         background: #ff6b35;
         cursor: pointer;
+      }
+      #vv-density-slider::-moz-range-thumb {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ff6b35;
+        cursor: pointer;
+        border: none;
       }
       #vv-density-value {
         min-width: 20px;
@@ -327,7 +401,7 @@
     btn.addEventListener('click', function(e) {
       e.stopPropagation();
       // Show message to use extension popup
-      alert('Click the VideoVitals extension icon in your browser toolbar to sign in with Google.');
+      alert('Click the VideoVitals extension icon in your browser toolbar to sign in.');
     });
 
     return btn;
@@ -398,6 +472,8 @@
     removeUI();
 
     const actionsContainer = document.querySelector('#top-level-buttons-computed');
+    console.log('[VideoVitals] Actions container found:', !!actionsContainer);
+
     if (!actionsContainer) return false;
 
     if (isSignedIn) {
@@ -405,9 +481,11 @@
       const slider = createSlider();
       actionsContainer.insertBefore(slider, actionsContainer.firstChild);
       actionsContainer.insertBefore(btn, actionsContainer.firstChild);
+      console.log('[VideoVitals] Injected clickbait button and slider');
     } else {
       const signInBtn = createSignInButton();
       actionsContainer.insertBefore(signInBtn, actionsContainer.firstChild);
+      console.log('[VideoVitals] Injected sign-in button');
     }
 
     return true;
@@ -421,11 +499,24 @@
 
   // Initialize
   async function init() {
-    if (!location.hostname.includes('youtube.com')) return;
-    if (!location.pathname.includes('/watch')) return;
+    console.log('[VideoVitals] Initializing...');
+
+    if (!location.hostname.includes('youtube.com')) {
+      console.log('[VideoVitals] Not on YouTube, skipping');
+      return;
+    }
+    if (!location.pathname.includes('/watch')) {
+      console.log('[VideoVitals] Not on watch page, skipping');
+      return;
+    }
 
     const videoId = getVideoId();
-    if (!videoId) return;
+    if (!videoId) {
+      console.log('[VideoVitals] No video ID found');
+      return;
+    }
+
+    console.log('[VideoVitals] Video ID:', videoId);
 
     // Reset for new video
     if (videoId !== currentVideoId) {
@@ -439,6 +530,7 @@
 
     // Check auth status
     await checkAuth();
+    console.log('[VideoVitals] Signed in:', isSignedIn);
 
     // Load data if signed in
     if (isSignedIn) {
@@ -447,18 +539,23 @@
 
     // Inject UI with retry
     if (!injectUI()) {
+      console.log('[VideoVitals] UI container not found, retrying...');
       let attempts = 0;
       const interval = setInterval(() => {
         attempts++;
         if (injectUI() || attempts > 30) {
           clearInterval(interval);
+          if (attempts > 30) {
+            console.log('[VideoVitals] Failed to find UI container after 30 attempts');
+          }
         }
       }, 500);
     }
   }
 
   // Listen for auth state changes from popup
-  chrome.storage.onChanged.addListener((changes, area) => {
+  browserAPI.storage.onChanged.addListener((changes, area) => {
+    console.log('[VideoVitals] Storage changed:', area, changes);
     if (area === 'local' && changes.vv_signed_in) {
       isSignedIn = changes.vv_signed_in.newValue || false;
       if (changes.vv_user_id) {
@@ -483,11 +580,12 @@
     init();
   }
 
-  // Watch for navigation
+  // Watch for navigation (YouTube is a SPA)
   let lastUrl = location.href;
   setInterval(() => {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
+      console.log('[VideoVitals] URL changed, reinitializing...');
       window.vvLoaded = false;
       setTimeout(init, 1500);
       window.vvLoaded = true;

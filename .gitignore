@@ -11,6 +11,8 @@
 # next.js
 /.next/
 /out/
+/out-chrome/
+/out-firefox/
 /build
 
 # misc

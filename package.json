@@ -6,8 +6,11 @@
     "dev": "next dev --turbopack -p 9002",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
-    "build": "NODE_ENV=production next build && npm run build:extension",
-    "build:extension": "cd out && mv _next next && find . -name '*.html' -exec sed -i '' 's/_next/next/g' {} + && find . -name '*.js' -exec sed -i '' 's/_next/next/g' {} + && cd .. && node scripts/fix-for-extension.js && node scripts/inject-env.js",
+    "build": "npm run build:chrome",
+    "build:base": "NODE_ENV=production next build && cd out && mv _next next && find . -name '*.html' -exec sed -i '' 's/_next/next/g' {} + && find . -name '*.js' -exec sed -i '' 's/_next/next/g' {} + && cd .. && node scripts/fix-for-extension.js",
+    "build:chrome": "npm run build:base && node scripts/inject-env.js chrome",
+    "build:firefox": "npm run build:base && node scripts/inject-env.js firefox",
+    "build:all": "npm run build:base && node scripts/build-all.js",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
