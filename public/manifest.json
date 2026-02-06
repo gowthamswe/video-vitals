@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "VideoVitals",
+  "version": "1.0",
+  "description": "Rate YouTube videos for clickbait",
+  "action": {
+    "default_popup": "index.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "permissions": ["storage", "identity"],
+  "oauth2": {
+    "client_id": "YOUR_OAUTH_CLIENT_ID_HERE",
+    "scopes": ["openid", "email", "profile"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*", "https://youtube.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ]
+}

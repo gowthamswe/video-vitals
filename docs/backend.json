@@ -1,0 +1,179 @@
+{
+  "entities": {
+    "Video": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Video",
+      "type": "object",
+      "description": "Represents a YouTube video with its associated clickbait and information density ratings.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Video entity. This is the YouTube video ID."
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the YouTube video."
+        },
+        "channelId": {
+          "type": "string",
+          "description": "Reference to the Channel that uploaded the video. (Relationship: Channel 1:N Video)"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "channelId"
+      ]
+    },
+    "Rating": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Rating",
+      "type": "object",
+      "description": "Represents a user's rating for a specific video, including clickbait flag and information density.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Rating entity."
+        },
+        "videoId": {
+          "type": "string",
+          "description": "Reference to the Video being rated. (Relationship: Video 1:N Rating)"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User who submitted the rating. (Relationship: User 1:N Rating)"
+        },
+        "clickbaitFlag": {
+          "type": "boolean",
+          "description": "A flag indicating whether the user considers the video to be clickbait."
+        },
+        "informationDensity": {
+          "type": "number",
+          "description": "The user's rating of the video's information density, on a scale of 0 to 10.",
+          "format": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "videoId",
+        "userId",
+        "clickbaitFlag",
+        "informationDensity"
+      ]
+    },
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the TubeSleuth extension.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "Channel": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Channel",
+      "type": "object",
+      "description": "Represents a YouTube channel.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Channel entity. This is the YouTube channel ID."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the YouTube channel."
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profiles. Path-based ownership ensures only the user can read/write their profile.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/videos/{videoId}",
+        "definition": {
+          "entityName": "Video",
+          "schema": {
+            "$ref": "#/backend/entities/Video"
+          },
+          "description": "Stores video metadata.",
+          "params": [
+            {
+              "name": "videoId",
+              "description": "The unique identifier of the video (YouTube video ID)."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/videos/{videoId}/ratings/{ratingId}",
+        "definition": {
+          "entityName": "Rating",
+          "schema": {
+            "$ref": "#/backend/entities/Rating"
+          },
+          "description": "Stores user ratings for each video. Includes denormalized 'videoId' and 'userId' for authorization independence.",
+          "params": [
+            {
+              "name": "videoId",
+              "description": "The unique identifier of the video being rated."
+            },
+            {
+              "name": "ratingId",
+              "description": "The unique identifier of the rating."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/channels/{channelId}",
+        "definition": {
+          "entityName": "Channel",
+          "schema": {
+            "$ref": "#/backend/entities/Channel"
+          },
+          "description": "Stores Channel metadata.",
+          "params": [
+            {
+              "name": "channelId",
+              "description": "The unique identifier of the channel (YouTube channel ID)."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to store user ratings (clickbait and information density) for YouTube videos. It emphasizes authorization independence and efficient querying.\n\n*   `/users/{userId}`: Stores user profiles. Path-based ownership ensures only the user can read/write their profile.\n*   `/videos/{videoId}`: Stores video metadata.\n*   `/videos/{videoId}/ratings/{ratingId}`: Stores user ratings for each video.  The `videoId` is denormalized into the Rating document. This allows efficient querying of ratings for a specific video without needing to query across all ratings and filter. It also enables simple security rules based on the video ID. The userId is denormalized as `userId`.\n\nThis structure facilitates secure list operations by ensuring that listing ratings is always scoped to a specific video (`/videos/{videoId}/ratings`).  Security rules can then efficiently control access based on the `videoId` and `userId`."
+  }
+}

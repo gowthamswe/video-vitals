@@ -1,0 +1,16 @@
+{
+  "placeholderImages": [
+    {
+      "id": "video-thumbnail",
+      "description": "A placeholder image for the main video.",
+      "imageUrl": "https://images.unsplash.com/photo-1557264337-e8a93017fe92?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHx0ZWNoJTIwYWJzdHJhY3R8ZW58MHx8fHwxNzY5NDA2NDMzfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "tech abstract"
+    },
+    {
+      "id": "channel-avatar",
+      "description": "A placeholder image for the channel avatar.",
+      "imageUrl": "https://images.unsplash.com/photo-1726409724841-016b6f4f8b1b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxsb2dvJTIwYWJzdHJhY3R8ZW58MHx8fHwxNzY5NDI0MjIwfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "logo abstract"
+    }
+  ]
+}

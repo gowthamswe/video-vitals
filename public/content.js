@@ -1,0 +1,496 @@
+// VideoVitals - Content Script with Auth + Firebase
+// NOTE: Firebase credentials are injected at build time from environment variables
+
+(function() {
+  'use strict';
+
+  if (window.vvLoaded) return;
+  window.vvLoaded = true;
+
+  // Firebase config - these will be replaced at build time
+  // If you're forking this project, set these in your .env.local file
+  const FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '';
+  const FIREBASE_API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '';
+
+  // State
+  let isSignedIn = false;
+  let isClickbait = false;
+  let clickbaitCount = 0;
+  let density = null;
+  let currentVideoId = null;
+  let userId = null;
+
+  // Check if user is signed in
+  async function checkAuth() {
+    try {
+      const result = await chrome.storage.local.get(['vv_user_id', 'vv_signed_in']);
+      if (result.vv_signed_in && result.vv_user_id) {
+        userId = result.vv_user_id;
+        isSignedIn = true;
+        return true;
+      }
+    } catch (e) {
+      console.log('[VideoVitals] Auth check error:', e);
+    }
+    isSignedIn = false;
+    return false;
+  }
+
+  // Sign in (generate anonymous user ID)
+  async function signIn() {
+    try {
+      userId = 'user_' + Math.random().toString(36).substr(2, 9) + Date.now();
+      await chrome.storage.local.set({
+        vv_user_id: userId,
+        vv_signed_in: true
+      });
+      isSignedIn = true;
+      console.log('[VideoVitals] Signed in:', userId);
+
+      // Reload data and UI
+      await loadData();
+      injectUI();
+    } catch (e) {
+      console.log('[VideoVitals] Sign in error:', e);
+    }
+  }
+
+  // Get user ID
+  async function getUserId() {
+    if (userId) return userId;
+
+    try {
+      const result = await chrome.storage.local.get(['vv_user_id']);
+      if (result.vv_user_id) {
+        userId = result.vv_user_id;
+      }
+    } catch (e) {
+      console.log('[VideoVitals] Get user ID error:', e);
+    }
+    return userId;
+  }
+
+  // Firebase REST API - Save rating (fire and forget)
+  function syncToFirebase(data) {
+    if (!userId) return;
+
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/videos/${currentVideoId}/ratings/${userId}?key=${FIREBASE_API_KEY}`;
+
+    const firestoreData = {
+      fields: {
+        videoId: { stringValue: currentVideoId },
+        userId: { stringValue: userId },
+        clickbaitFlag: { booleanValue: data.isClickbait },
+        informationDensity: { integerValue: data.density !== null ? data.density : 0 },
+        updatedAt: { timestampValue: new Date().toISOString() }
+      }
+    };
+
+    fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(firestoreData)
+    }).then(response => {
+      if (response.ok) {
+        console.log('[VideoVitals] Synced to Firebase');
+      } else {
+        console.log('[VideoVitals] Firebase sync failed:', response.status);
+      }
+    }).catch(err => {
+      console.log('[VideoVitals] Firebase sync error:', err);
+    });
+  }
+
+  // Firebase REST API - Load ratings for video
+  async function loadFromFirebase() {
+    if (!currentVideoId) return null;
+
+    try {
+      const uid = await getUserId();
+
+      let userRating = null;
+      if (uid) {
+        // Get user's rating
+        const userRatingUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/videos/${currentVideoId}/ratings/${uid}?key=${FIREBASE_API_KEY}`;
+        const userResponse = await fetch(userRatingUrl);
+
+        if (userResponse.ok) {
+          const data = await userResponse.json();
+          if (data.fields) {
+            userRating = {
+              isClickbait: data.fields.clickbaitFlag?.booleanValue || false,
+              density: data.fields.informationDensity?.integerValue
+                ? parseInt(data.fields.informationDensity.integerValue)
+                : null
+            };
+          }
+        }
+      }
+
+      // Get all ratings for clickbait count
+      const allRatingsUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/videos/${currentVideoId}/ratings?key=${FIREBASE_API_KEY}`;
+      const allResponse = await fetch(allRatingsUrl);
+
+      let count = 0;
+      if (allResponse.ok) {
+        const allData = await allResponse.json();
+        if (allData.documents) {
+          count = allData.documents.filter(doc =>
+            doc.fields?.clickbaitFlag?.booleanValue === true
+          ).length;
+        }
+      }
+
+      return { userRating, clickbaitCount: count };
+    } catch (e) {
+      console.log('[VideoVitals] Firebase load error:', e);
+      return null;
+    }
+  }
+
+  // Load data
+  async function loadData() {
+    if (!currentVideoId || !isSignedIn) return;
+
+    // First, load from local storage
+    try {
+      const result = await chrome.storage.local.get([`vv_${currentVideoId}`]);
+      const data = result[`vv_${currentVideoId}`];
+
+      if (data) {
+        isClickbait = data.isClickbait || false;
+        density = data.density !== undefined ? data.density : null;
+        clickbaitCount = isClickbait ? 1 : 0;
+        updateUI();
+      }
+    } catch (e) {
+      console.log('[VideoVitals] Local storage load error:', e);
+    }
+
+    // Then sync from Firebase
+    loadFromFirebase().then(firebaseData => {
+      console.log('[VideoVitals] Firebase data:', firebaseData);
+      if (firebaseData && firebaseData.userRating) {
+        isClickbait = firebaseData.userRating.isClickbait;
+        density = firebaseData.userRating.density;
+        clickbaitCount = firebaseData.clickbaitCount;
+        saveDataLocal();
+        updateUI();
+      } else if (firebaseData && firebaseData.clickbaitCount > 0) {
+        clickbaitCount = firebaseData.clickbaitCount;
+        updateUI();
+      }
+    });
+  }
+
+  // Save data locally
+  async function saveDataLocal() {
+    if (!currentVideoId) return;
+
+    try {
+      await chrome.storage.local.set({
+        [`vv_${currentVideoId}`]: {
+          isClickbait,
+          density
+        }
+      });
+    } catch (e) {
+      console.log('[VideoVitals] Storage save error:', e);
+    }
+  }
+
+  // Save data locally + sync to Firebase
+  function saveData() {
+    saveDataLocal();
+    syncToFirebase({ isClickbait, density });
+  }
+
+  // Inject CSS
+  function addStyles() {
+    if (document.getElementById('vv-styles')) return;
+
+    const style = document.createElement('style');
+    style.id = 'vv-styles';
+    style.textContent = `
+      #vv-signin-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 16px;
+        height: 36px;
+        border: none;
+        border-radius: 18px;
+        background: #ff6b35;
+        color: white;
+        font-family: "Roboto", "Arial", sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        margin-right: 8px;
+        transition: background 0.2s;
+      }
+      #vv-signin-btn:hover {
+        background: #e55a2b;
+      }
+      #vv-clickbait-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 16px;
+        height: 36px;
+        border: none;
+        border-radius: 18px;
+        background: rgba(255,255,255,0.1);
+        color: var(--yt-spec-text-primary, #f1f1f1);
+        font-family: "Roboto", "Arial", sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        margin-right: 8px;
+        transition: background 0.2s;
+      }
+      #vv-clickbait-btn:hover {
+        background: rgba(255,255,255,0.2);
+      }
+      #vv-clickbait-btn.active {
+        background: #ff6b35;
+        color: white;
+      }
+      #vv-density-container {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        height: 36px;
+        border-radius: 18px;
+        background: rgba(255,255,255,0.1);
+        margin-right: 8px;
+        font-family: "Roboto", "Arial", sans-serif;
+        font-size: 14px;
+        color: var(--yt-spec-text-primary, #f1f1f1);
+      }
+      #vv-density-slider {
+        width: 80px;
+        height: 4px;
+        border-radius: 2px;
+        background: rgba(255,255,255,0.3);
+        outline: none;
+        -webkit-appearance: none;
+        appearance: none;
+        cursor: pointer;
+      }
+      #vv-density-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ff6b35;
+        cursor: pointer;
+      }
+      #vv-density-value {
+        min-width: 20px;
+        text-align: center;
+        font-weight: 500;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Update UI
+  function updateUI() {
+    const btn = document.getElementById('vv-clickbait-btn');
+    const densityValue = document.getElementById('vv-density-value');
+    const densitySlider = document.getElementById('vv-density-slider');
+
+    if (btn) {
+      btn.classList.toggle('active', isClickbait);
+      btn.innerHTML = `🚩 ${clickbaitCount}`;
+    }
+
+    if (densityValue) {
+      densityValue.textContent = density === null ? '_' : density;
+    }
+
+    if (densitySlider) {
+      densitySlider.value = density === null ? 0 : density;
+    }
+  }
+
+  // Create sign in button - opens extension popup
+  function createSignInButton() {
+    const btn = document.createElement('button');
+    btn.id = 'vv-signin-btn';
+    btn.title = 'Sign in to VideoVitals';
+    btn.innerHTML = `🎬 Sign in to VideoVitals`;
+
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      // Show message to use extension popup
+      alert('Click the VideoVitals extension icon in your browser toolbar to sign in with Google.');
+    });
+
+    return btn;
+  }
+
+  // Create clickbait button
+  function createButton() {
+    const btn = document.createElement('button');
+    btn.id = 'vv-clickbait-btn';
+    btn.title = 'Clickbait';
+    btn.innerHTML = `🚩 ${clickbaitCount}`;
+    if (isClickbait) btn.classList.add('active');
+
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+
+      isClickbait = !isClickbait;
+      clickbaitCount += isClickbait ? 1 : -1;
+      this.classList.toggle('active', isClickbait);
+      this.innerHTML = `🚩 ${clickbaitCount}`;
+
+      saveData();
+    });
+
+    return btn;
+  }
+
+  // Create density slider
+  function createSlider() {
+    const container = document.createElement('div');
+    container.id = 'vv-density-container';
+    container.title = 'Information Density';
+    const displayValue = density === null ? '_' : density;
+    const sliderValue = density === null ? 0 : density;
+    container.innerHTML = `
+      <span>📊</span>
+      <input type="range" id="vv-density-slider" min="0" max="10" value="${sliderValue}" title="Information Density">
+      <span id="vv-density-value">${displayValue}</span>
+    `;
+
+    const slider = container.querySelector('#vv-density-slider');
+    slider.addEventListener('input', function(e) {
+      e.stopPropagation();
+      density = parseInt(this.value);
+      document.getElementById('vv-density-value').textContent = density;
+    });
+
+    slider.addEventListener('change', function(e) {
+      e.stopPropagation();
+      density = parseInt(this.value);
+      saveData();
+    });
+
+    return container;
+  }
+
+  // Remove existing UI elements
+  function removeUI() {
+    const elements = ['vv-signin-btn', 'vv-clickbait-btn', 'vv-density-container'];
+    elements.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    });
+  }
+
+  // Inject UI based on auth state
+  function injectUI() {
+    removeUI();
+
+    const actionsContainer = document.querySelector('#top-level-buttons-computed');
+    if (!actionsContainer) return false;
+
+    if (isSignedIn) {
+      const btn = createButton();
+      const slider = createSlider();
+      actionsContainer.insertBefore(slider, actionsContainer.firstChild);
+      actionsContainer.insertBefore(btn, actionsContainer.firstChild);
+    } else {
+      const signInBtn = createSignInButton();
+      actionsContainer.insertBefore(signInBtn, actionsContainer.firstChild);
+    }
+
+    return true;
+  }
+
+  // Get video ID
+  function getVideoId() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('v');
+  }
+
+  // Initialize
+  async function init() {
+    if (!location.hostname.includes('youtube.com')) return;
+    if (!location.pathname.includes('/watch')) return;
+
+    const videoId = getVideoId();
+    if (!videoId) return;
+
+    // Reset for new video
+    if (videoId !== currentVideoId) {
+      currentVideoId = videoId;
+      isClickbait = false;
+      clickbaitCount = 0;
+      density = null;
+    }
+
+    addStyles();
+
+    // Check auth status
+    await checkAuth();
+
+    // Load data if signed in
+    if (isSignedIn) {
+      await loadData();
+    }
+
+    // Inject UI with retry
+    if (!injectUI()) {
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if (injectUI() || attempts > 30) {
+          clearInterval(interval);
+        }
+      }, 500);
+    }
+  }
+
+  // Listen for auth state changes from popup
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.vv_signed_in) {
+      isSignedIn = changes.vv_signed_in.newValue || false;
+      if (changes.vv_user_id) {
+        userId = changes.vv_user_id.newValue;
+      }
+      if (isSignedIn) {
+        loadData().then(() => injectUI());
+      } else {
+        // Reset state on sign out
+        isClickbait = false;
+        clickbaitCount = 0;
+        density = null;
+        injectUI();
+      }
+    }
+  });
+
+  // Run on load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+  // Watch for navigation
+  let lastUrl = location.href;
+  setInterval(() => {
+    if (location.href !== lastUrl) {
+      lastUrl = location.href;
+      window.vvLoaded = false;
+      setTimeout(init, 1500);
+      window.vvLoaded = true;
+    }
+  }, 1000);
+})();

@@ -1,0 +1,204 @@
+/**
+ * =================================================================================================
+ * IMPORTANT: THIS FILE SHOULD BE COMMITTED TO GIT
+ * =================================================================================================
+ *
+ * This file is the source code for your Firestore Security Rules. It defines who can read,
+ * write, and access data in your database. It is NOT a file of secrets, but rather the
+ * security logic for your application.
+ *
+ * Keeping this file in version control is critical for:
+ * - Tracking changes to your security policy over time.
+ * - Collaborating with a team on security logic.
+ * - Enabling automated deployments and CI/CD.
+ *
+ * The security of your application relies on the logic within this file, not on keeping
+ * the file itself a secret.
+ *
+ * =================================================================================================
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * Core Philosophy: This ruleset secures a video rating application. The model allows any
+     * user (authenticated or not) to read public data like video and channel information.
+     * Authenticated users can create and manage their own ratings for videos. User profiles
+     * are strictly private to the owner.
+     *
+     * Data Structure:
+     * - /users/{userId}: Private user profile data.
+     * - /channels/{channelId}: Publicly readable channel metadata.
+     * - /videos/{videoId}: Publicly readable video metadata.
+     * - /videos/{videoId}/ratings/{ratingId}: User-submitted ratings for a specific video.
+     *   Ratings are publicly readable but can only be written by their owner.
+     *
+     * Key Security Decisions:
+     * - User profiles (/users) are strictly owner-only. User listing is disabled.
+     * - Global metadata collections (/videos, /channels) are public and read-only for clients.
+     *   This prevents malicious data creation and assumes this data is populated by a
+     *   trusted backend service.
+     * - Ratings are secured using a "Public Read with Owner-Only Writes" pattern. A denormalized
+     *   `userId` field on each rating document is the source of truth for write authorization.
+     * - **Schema Validation:** Write operations on ratings are strictly validated to ensure
+     *   data integrity and prevent malicious or malformed data from being saved.
+     *
+     * Denormalization for Authorization:
+     * The `/videos/{videoId}/ratings/{ratingId}` documents contain a denormalized `userId` field.
+     * This is critical for security, as it allows for a fast and simple ownership check
+     * (`resource.data.userId == request.auth.uid`) without needing any extra `get()` calls,
+     * which would be slow, costly, and complex.
+     */
+
+    // --------------------------------------------------------------------------
+    // Helper Functions
+    // --------------------------------------------------------------------------
+
+    /**
+     * Checks if a user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Checks if the currently authenticated user's UID matches the provided userId.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Checks if the document already exists AND the authenticated user is the owner.
+     * Used for safe update and delete operations.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * Validates the schema for a new Rating document.
+     * Ensures all required fields are present with the correct types and no extra fields exist.
+     */
+    function isNewRatingSchema(data) {
+      let requiredKeys = ['videoId', 'userId', 'clickbaitFlag', 'informationDensity', 'createdAt', 'updatedAt'];
+      let optionalKeys = [];
+      let allKeys = requiredKeys.concat(optionalKeys);
+
+      return data.keys().hasAll(requiredKeys) &&
+             data.keys().hasOnly(allKeys) &&
+             data.videoId is string &&
+             data.userId is string &&
+             data.clickbaitFlag is bool &&
+             data.informationDensity is number &&
+             data.informationDensity >= 0 && data.informationDensity <= 10 &&
+             data.createdAt == request.time &&
+             data.updatedAt == request.time;
+    }
+    
+    /**
+     * Validates the schema for an updated Rating document.
+     * Ensures that only allowed fields are updated with the correct types.
+     */
+    function isUpdateRatingSchema(data) {
+      let allowedUpdateKeys = ['clickbaitFlag', 'informationDensity', 'updatedAt'];
+      
+      return data.keys().hasAny(allowedUpdateKeys) &&
+             ('clickbaitFlag' in data ? data.clickbaitFlag is bool : true) &&
+             ('informationDensity' in data ? (
+                data.informationDensity is number &&
+                data.informationDensity >= 0 &&
+                data.informationDensity <= 10
+             ) : true) &&
+             data.updatedAt == request.time;
+    }
+
+
+    // --------------------------------------------------------------------------
+    // Collection Rules
+    // --------------------------------------------------------------------------
+
+    /**
+     * @description A user can create and manage their own user profile document. No other user
+     *              can read, write, or even see that the document exists. Listing all users
+     *              is explicitly forbidden.
+     * @path /users/{userId}
+     * @allow (create) An authenticated user with UID 'user_abc' can create their own profile at `/users/user_abc`.
+     * @deny (get) An authenticated user 'user_xyz' is denied access to read `/users/user_abc`.
+     * @deny (list) No user can list the documents in the `/users` collection.
+     * @principle Restricts access to a user's own data tree and prevents enumeration of all users.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Channel metadata is public information that any client can read. To maintain
+     *              data integrity, documents in this collection cannot be created, updated,
+     *              or deleted by clients. It is assumed this data is managed by a trusted backend.
+     * @path /channels/{channelId}
+     * @allow (get) Any user, including unauthenticated ones, can read a channel's document.
+     * @deny (create) An authenticated user is denied from creating a new channel document.
+     * @principle Public read access for global data, with writes restricted to backend processes (denied for clients).
+     */
+    match /channels/{channelId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    /**
+     * @description Video metadata is public information that any client can read. To maintain
+     *              data integrity, documents in this collection cannot be created, updated,
+     *              or deleted by clients. It is assumed this data is managed by a trusted backend.
+     * @path /videos/{videoId}
+     * @allow (get) Any user, including unauthenticated ones, can read a video's document.
+     * @deny (create) An authenticated user is denied from creating a new video document.
+     * @principle Public read access for global data, with writes restricted to backend processes (denied for clients).
+     */
+    match /videos/{videoId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+
+      /**
+       * @description Allows users to rate videos and manage their own ratings. All ratings are
+       *              publicly visible to allow the client to display them. Writes are strictly
+       *              controlled to ensure users only create ratings as themselves and can only
+       *              modify or delete their own submissions.
+       * @path /videos/{videoId}/ratings/{ratingId}
+       * @allow (create) Signed-in user 'user_abc' creates a rating for video 'vid_123' with `userId: 'user_abc'` in the data, matching the schema.
+       * @deny (update) User 'user_abc' is denied from updating a rating at `.../ratings/{ratingId}` where `resource.data.userId` is 'user_xyz'.
+       * @deny (create) User 'user_abc' is denied from creating a rating with `userId: 'user_xyz'`.
+       * @principle Enforces "Public Read with Owner-Only Writes", validates relational integrity, and enforces strict data schema.
+       */
+       match /ratings/{ratingId} {
+        allow get: if true;
+        allow list: if true;
+        
+        // On create, user must be owner and the new data must match the video context and the strict schema.
+        allow create: if isOwner(request.resource.data.userId)
+                      && request.resource.data.videoId == videoId
+                      && isNewRatingSchema(request.resource.data);
+
+        // On update, user must be the owner of the existing doc, not changing ownership, and matching the update schema.
+        allow update: if isExistingOwner(resource.data.userId)
+                      && request.resource.data.videoId == resource.data.videoId
+                      && request.resource.data.userId == resource.data.userId
+                      && isUpdateRatingSchema(request.resource.data);
+                      
+        // On delete, user must be owner of the document.
+        allow delete: if isExistingOwner(resource.data.userId);
+      }
+    }
+  }
+}
