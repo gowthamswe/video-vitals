@@ -12,7 +12,6 @@
 
   // Detect browser type
   const isFirefox = typeof browser !== 'undefined' && typeof InstallTrigger !== 'undefined';
-  const isChrome = !isFirefox && typeof chrome !== 'undefined';
 
   // Use browser API (Firefox) or chrome API (Chrome)
   const browserAPI = isFirefox ? browser : chrome;
@@ -95,25 +94,6 @@
     }
     isSignedIn = false;
     return false;
-  }
-
-  // Sign in (generate anonymous user ID)
-  async function signIn() {
-    try {
-      userId = 'user_' + Math.random().toString(36).substr(2, 9) + Date.now();
-      await storageSet({
-        vv_user_id: userId,
-        vv_signed_in: true
-      });
-      isSignedIn = true;
-      console.log('[VideoVitals] Signed in:', userId);
-
-      // Reload data and UI
-      await loadData();
-      injectUI();
-    } catch (e) {
-      console.log('[VideoVitals] Sign in error:', e);
-    }
   }
 
   // Get user ID
@@ -559,7 +539,6 @@
     const slider = container.querySelector('#vv-density-slider');
     const sliderTooltip = container.querySelector('#vv-slider-tooltip');
     const resetBtn = container.querySelector('#vv-density-reset');
-    const valueDisplay = container.querySelector('#vv-density-value');
 
     // Update tooltip position based on slider value
     function updateTooltipPosition(val) {
