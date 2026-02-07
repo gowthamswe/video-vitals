@@ -115,34 +115,41 @@ browsers.forEach(browser => {
     console.log(`  ✓ Copied browser-polyfill.js`);
   }
 
-  // For Firefox, copy the simple popup.html, popup.js, and background.js
+  // Copy popup.html for both browsers
+  const popupHtmlSource = path.join(rootDir, 'public', 'popup.html');
+  const popupHtmlDest = path.join(browserOutDir, 'popup.html');
+  if (fs.existsSync(popupHtmlSource)) {
+    fs.copyFileSync(popupHtmlSource, popupHtmlDest);
+    console.log(`  ✓ Copied popup.html`);
+  }
+
+  // Copy popup.js with browser-specific OAuth client ID
+  const popupJsSource = path.join(rootDir, 'public', 'popup.js');
+  const popupJsDest = path.join(browserOutDir, 'popup.js');
+  if (fs.existsSync(popupJsSource)) {
+    let popupJs = fs.readFileSync(popupJsSource, 'utf8');
+
+    // Inject OAuth client ID based on browser
+    if (browser === 'firefox' && env.NEXT_PUBLIC_FIREFOX_OAUTH_CLIENT_ID) {
+      popupJs = popupJs.replace(
+        /FIREFOX_OAUTH_CLIENT_ID_PLACEHOLDER/g,
+        env.NEXT_PUBLIC_FIREFOX_OAUTH_CLIENT_ID
+      );
+      console.log(`  ✓ Injected Firefox OAuth client ID into popup.js`);
+    } else if (browser === 'chrome' && env.NEXT_PUBLIC_CHROME_OAUTH_CLIENT_ID) {
+      popupJs = popupJs.replace(
+        /FIREFOX_OAUTH_CLIENT_ID_PLACEHOLDER/g,
+        env.NEXT_PUBLIC_CHROME_OAUTH_CLIENT_ID
+      );
+      console.log(`  ✓ Injected Chrome OAuth client ID into popup.js`);
+    }
+
+    fs.writeFileSync(popupJsDest, popupJs);
+    console.log(`  ✓ Copied popup.js`);
+  }
+
+  // Copy background.js for Firefox OAuth handling
   if (browser === 'firefox') {
-    const popupHtmlSource = path.join(rootDir, 'public', 'popup.html');
-    const popupHtmlDest = path.join(browserOutDir, 'popup.html');
-    if (fs.existsSync(popupHtmlSource)) {
-      fs.copyFileSync(popupHtmlSource, popupHtmlDest);
-      console.log(`  ✓ Copied popup.html`);
-    }
-
-    const popupJsSource = path.join(rootDir, 'public', 'popup.js');
-    const popupJsDest = path.join(browserOutDir, 'popup.js');
-    if (fs.existsSync(popupJsSource)) {
-      let popupJs = fs.readFileSync(popupJsSource, 'utf8');
-
-      // Inject Firefox OAuth client ID
-      if (env.NEXT_PUBLIC_FIREFOX_OAUTH_CLIENT_ID) {
-        popupJs = popupJs.replace(
-          /FIREFOX_OAUTH_CLIENT_ID_PLACEHOLDER/g,
-          env.NEXT_PUBLIC_FIREFOX_OAUTH_CLIENT_ID
-        );
-        console.log(`  ✓ Injected Firefox OAuth client ID into popup.js`);
-      }
-
-      fs.writeFileSync(popupJsDest, popupJs);
-      console.log(`  ✓ Copied popup.js`);
-    }
-
-    // Copy background.js for Firefox OAuth handling
     const bgJsSource = path.join(rootDir, 'public', 'background.js');
     const bgJsDest = path.join(browserOutDir, 'background.js');
     if (fs.existsSync(bgJsSource)) {

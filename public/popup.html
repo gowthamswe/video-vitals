@@ -6,25 +6,25 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 320px; min-height: 200px; }
-    body { font-family: Arial, sans-serif; background: #fff; }
-    .header { padding: 16px; background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%); color: white; }
-    .logo { font-size: 18px; font-weight: bold; }
+    body { font-family: Arial, sans-serif; background: #1a1a1a; color: #e0e0e0; }
+    .header { padding: 16px; background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%); border-bottom: 1px solid #333; }
+    .logo { font-size: 18px; font-weight: bold; color: #ff8c5a; }
     .content { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
-    .text { font-size: 14px; color: #666; line-height: 1.5; }
-    .user-box { display: flex; align-items: center; gap: 12px; padding: 12px; background: #f5f5f5; border-radius: 8px; }
+    .text { font-size: 14px; color: #999; line-height: 1.5; }
+    .user-box { display: flex; align-items: center; gap: 12px; padding: 12px; background: #2d2d2d; border-radius: 8px; border: 1px solid #3d3d3d; }
     .avatar { width: 40px; height: 40px; border-radius: 50%; }
     .user-info { display: flex; flex-direction: column; gap: 2px; }
-    .user-name { font-size: 14px; font-weight: 600; color: #333; }
-    .user-email { font-size: 12px; color: #666; }
-    .sign-in-btn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 20px; background: #fff; color: #333; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; }
-    .sign-in-btn:hover { background: #f5f5f5; }
-    .sign-out-btn { padding: 10px 16px; background: #f5f5f5; color: #666; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; }
-    .sign-out-btn:hover { background: #e5e5e5; }
+    .user-name { font-size: 14px; font-weight: 600; color: #e0e0e0; }
+    .user-email { font-size: 12px; color: #888; }
+    .sign-in-btn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 20px; background: #2d2d2d; color: #e0e0e0; border: 1px solid #3d3d3d; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+    .sign-in-btn:hover { background: #3d3d3d; border-color: #ff8c5a; }
+    .sign-out-btn { padding: 10px 16px; background: #2d2d2d; color: #999; border: 1px solid #3d3d3d; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+    .sign-out-btn:hover { background: #3d3d3d; color: #e0e0e0; }
     .google-icon { width: 18px; height: 18px; }
-    .footer { padding: 12px 16px; border-top: 1px solid #eee; text-align: center; }
-    .footer-text { font-size: 11px; color: #999; }
-    .error-text { font-size: 12px; color: #d32f2f; }
-    .debug-text { font-size: 10px; color: #999; word-break: break-all; padding: 8px; background: #f0f0f0; border-radius: 4px; }
+    .footer { padding: 12px 16px; border-top: 1px solid #333; text-align: center; }
+    .footer-text { font-size: 11px; color: #666; }
+    .error-text { font-size: 12px; color: #ff6b6b; }
+    .debug-text { font-size: 10px; color: #666; word-break: break-all; padding: 8px; background: #2d2d2d; border-radius: 4px; border: 1px solid #3d3d3d; }
     .hidden { display: none !important; }
   </style>
 </head>

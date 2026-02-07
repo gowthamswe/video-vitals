@@ -4,7 +4,7 @@
   "version": "1.0",
   "description": "Rate YouTube videos for clickbait and information density",
   "action": {
-    "default_popup": "index.html",
+    "default_popup": "popup.html",
     "default_icon": {
       "16": "icon16.png",
       "48": "icon48.png",
