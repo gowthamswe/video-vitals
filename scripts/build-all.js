@@ -94,13 +94,13 @@ browsers.forEach(browser => {
   if (fs.existsSync(manifestSource)) {
     let manifest = fs.readFileSync(manifestSource, 'utf8');
 
-    // For Chrome, inject OAuth client ID
-    if (browser === 'chrome' && env.NEXT_PUBLIC_OAUTH_CLIENT_ID) {
+    // For Chrome, inject Chrome OAuth client ID
+    if (browser === 'chrome' && env.NEXT_PUBLIC_CHROME_OAUTH_CLIENT_ID) {
       manifest = manifest.replace(
         /"client_id":\s*"YOUR_OAUTH_CLIENT_ID_HERE"/,
-        `"client_id": "${env.NEXT_PUBLIC_OAUTH_CLIENT_ID}"`
+        `"client_id": "${env.NEXT_PUBLIC_CHROME_OAUTH_CLIENT_ID}"`
       );
-      console.log(`  ✓ Injected OAuth client ID`);
+      console.log(`  ✓ Injected Chrome OAuth client ID into manifest`);
     }
 
     fs.writeFileSync(manifestDest, manifest);
@@ -115,7 +115,7 @@ browsers.forEach(browser => {
     console.log(`  ✓ Copied browser-polyfill.js`);
   }
 
-  // For Firefox, copy the simple popup.html and popup.js (avoids Next.js CSP issues)
+  // For Firefox, copy the simple popup.html, popup.js, and background.js
   if (browser === 'firefox') {
     const popupHtmlSource = path.join(rootDir, 'public', 'popup.html');
     const popupHtmlDest = path.join(browserOutDir, 'popup.html');
@@ -127,8 +127,38 @@ browsers.forEach(browser => {
     const popupJsSource = path.join(rootDir, 'public', 'popup.js');
     const popupJsDest = path.join(browserOutDir, 'popup.js');
     if (fs.existsSync(popupJsSource)) {
-      fs.copyFileSync(popupJsSource, popupJsDest);
+      let popupJs = fs.readFileSync(popupJsSource, 'utf8');
+
+      // Inject Firefox OAuth client ID
+      if (env.NEXT_PUBLIC_FIREFOX_OAUTH_CLIENT_ID) {
+        popupJs = popupJs.replace(
+          /FIREFOX_OAUTH_CLIENT_ID_PLACEHOLDER/g,
+          env.NEXT_PUBLIC_FIREFOX_OAUTH_CLIENT_ID
+        );
+        console.log(`  ✓ Injected Firefox OAuth client ID into popup.js`);
+      }
+
+      fs.writeFileSync(popupJsDest, popupJs);
       console.log(`  ✓ Copied popup.js`);
+    }
+
+    // Copy background.js for Firefox OAuth handling
+    const bgJsSource = path.join(rootDir, 'public', 'background.js');
+    const bgJsDest = path.join(browserOutDir, 'background.js');
+    if (fs.existsSync(bgJsSource)) {
+      let bgJs = fs.readFileSync(bgJsSource, 'utf8');
+
+      // Inject Firefox OAuth client ID for background script
+      if (env.NEXT_PUBLIC_FIREFOX_OAUTH_CLIENT_ID) {
+        bgJs = bgJs.replace(
+          /FIREFOX_OAUTH_CLIENT_ID_PLACEHOLDER/g,
+          env.NEXT_PUBLIC_FIREFOX_OAUTH_CLIENT_ID
+        );
+        console.log(`  ✓ Injected Firefox OAuth client ID into background.js`);
+      }
+
+      fs.writeFileSync(bgJsDest, bgJs);
+      console.log(`  ✓ Copied background.js`);
     }
   }
 });

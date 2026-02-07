@@ -28,7 +28,9 @@
   let isSignedIn = false;
   let isClickbait = false;
   let clickbaitCount = 0;
-  let density = null;
+  let density = null;        // User's own rating
+  let avgDensity = null;     // Average rating from all users
+  let totalRatings = 0;      // Number of ratings
   let currentVideoId = null;
   let userId = null;
 
@@ -173,40 +175,55 @@
     try {
       const uid = await getUserId();
 
-      let userRating = null;
-      if (uid) {
-        // Get user's rating
-        const userRatingUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/videos/${currentVideoId}/ratings/${uid}?key=${FIREBASE_API_KEY}`;
-        const userResponse = await fetch(userRatingUrl);
-
-        if (userResponse.ok) {
-          const data = await userResponse.json();
-          if (data.fields) {
-            userRating = {
-              isClickbait: data.fields.clickbaitFlag?.booleanValue || false,
-              density: data.fields.informationDensity?.integerValue
-                ? parseInt(data.fields.informationDensity.integerValue)
-                : null
-            };
-          }
-        }
-      }
-
-      // Get all ratings for clickbait count
+      // Get all ratings for this video (for clickbait count AND average density)
       const allRatingsUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/videos/${currentVideoId}/ratings?key=${FIREBASE_API_KEY}`;
       const allResponse = await fetch(allRatingsUrl);
 
-      let count = 0;
+      let userRating = null;
+      let clickbaitFlagCount = 0;
+      let totalDensity = 0;
+      let densityCount = 0;
+
       if (allResponse.ok) {
         const allData = await allResponse.json();
         if (allData.documents) {
-          count = allData.documents.filter(doc =>
-            doc.fields?.clickbaitFlag?.booleanValue === true
-          ).length;
+          allData.documents.forEach(doc => {
+            // Count clickbait flags
+            if (doc.fields?.clickbaitFlag?.booleanValue === true) {
+              clickbaitFlagCount++;
+            }
+
+            // Sum up density ratings for average
+            const docDensity = doc.fields?.informationDensity?.integerValue;
+            if (docDensity && parseInt(docDensity) > 0) {
+              totalDensity += parseInt(docDensity);
+              densityCount++;
+            }
+
+            // Extract user's own rating
+            if (uid && doc.name && doc.name.endsWith(`/ratings/${uid}`)) {
+              userRating = {
+                isClickbait: doc.fields?.clickbaitFlag?.booleanValue || false,
+                density: docDensity ? parseInt(docDensity) : null
+              };
+              // If user's density is 0, treat as null (no rating)
+              if (userRating.density === 0) {
+                userRating.density = null;
+              }
+            }
+          });
         }
       }
 
-      return { userRating, clickbaitCount: count };
+      // Calculate average density
+      const averageDensity = densityCount > 0 ? Math.round((totalDensity / densityCount) * 10) / 10 : null;
+
+      return {
+        userRating,
+        clickbaitCount: clickbaitFlagCount,
+        avgDensity: averageDensity,
+        totalRatings: densityCount
+      };
     } catch (e) {
       console.log('[VideoVitals] Firebase load error:', e);
       return null;
@@ -217,7 +234,7 @@
   async function loadData() {
     if (!currentVideoId || !isSignedIn) return;
 
-    // First, load from local storage
+    // First, load from local storage for instant display
     try {
       const result = await storageGet([`vv_${currentVideoId}`]);
       const data = result[`vv_${currentVideoId}`];
@@ -232,17 +249,22 @@
       console.log('[VideoVitals] Local storage load error:', e);
     }
 
-    // Then sync from Firebase
+    // Then sync from Firebase (includes average calculation)
     loadFromFirebase().then(firebaseData => {
       console.log('[VideoVitals] Firebase data:', firebaseData);
-      if (firebaseData && firebaseData.userRating) {
-        isClickbait = firebaseData.userRating.isClickbait;
-        density = firebaseData.userRating.density;
+      if (firebaseData) {
+        // Update average density and total ratings
+        avgDensity = firebaseData.avgDensity;
+        totalRatings = firebaseData.totalRatings;
         clickbaitCount = firebaseData.clickbaitCount;
+
+        // Update user's own rating if exists
+        if (firebaseData.userRating) {
+          isClickbait = firebaseData.userRating.isClickbait;
+          density = firebaseData.userRating.density;
+        }
+
         saveDataLocal();
-        updateUI();
-      } else if (firebaseData && firebaseData.clickbaitCount > 0) {
-        clickbaitCount = firebaseData.clickbaitCount;
         updateUI();
       }
     });
@@ -333,6 +355,7 @@
         font-family: "Roboto", "Arial", sans-serif;
         font-size: 14px;
         color: var(--yt-spec-text-primary, #f1f1f1);
+        overflow: visible;
       }
       #vv-density-slider {
         width: 80px;
@@ -344,6 +367,31 @@
         -moz-appearance: none;
         appearance: none;
         cursor: pointer;
+      }
+      .vv-slider-wrapper {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+      }
+      .vv-slider-tooltip {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        transform: translateY(-50%);
+        display: none;
+        background: #ff6b35;
+        color: white;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        font-size: 11px;
+        font-weight: 600;
+        pointer-events: none;
+        white-space: nowrap;
+        z-index: 9999;
+        text-align: center;
+        line-height: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
       }
       #vv-density-slider::-webkit-slider-thumb {
         -webkit-appearance: none;
@@ -367,6 +415,30 @@
         text-align: center;
         font-weight: 500;
       }
+      #vv-density-value.no-rating {
+        color: #888;
+        cursor: help;
+        font-size: 16px;
+      }
+      #vv-density-reset {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border: none;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.2);
+        color: var(--yt-spec-text-primary, #f1f1f1);
+        font-size: 12px;
+        cursor: pointer;
+        padding: 0;
+        margin-left: 4px;
+        transition: background 0.2s;
+      }
+      #vv-density-reset:hover {
+        background: rgba(255,107,53,0.8);
+      }
     `;
     document.head.appendChild(style);
   }
@@ -376,6 +448,7 @@
     const btn = document.getElementById('vv-clickbait-btn');
     const densityValue = document.getElementById('vv-density-value');
     const densitySlider = document.getElementById('vv-density-slider');
+    const resetBtn = document.getElementById('vv-density-reset');
 
     if (btn) {
       btn.classList.toggle('active', isClickbait);
@@ -383,11 +456,33 @@
     }
 
     if (densityValue) {
-      densityValue.textContent = density === null ? '_' : density;
+      // Always show average (with count), fallback to user's rating if no average
+      const displayRating = avgDensity !== null ? avgDensity : density;
+
+      // Build tooltip showing user's rating
+      let tooltipText = 'Information Density';
+      if (density !== null) {
+        tooltipText = `Your rating: ${density}`;
+      }
+
+      if (displayRating === null) {
+        densityValue.innerHTML = '<span class="no-rating" title="No ratings yet. Be the first to rate!">ⓘ</span>';
+      } else {
+        // Show average with count: "7.2 (12)"
+        const countText = totalRatings > 0 ? ` (${totalRatings})` : '';
+        densityValue.textContent = displayRating + countText;
+        densityValue.title = tooltipText;
+        densityValue.classList.remove('no-rating');
+      }
     }
 
     if (densitySlider) {
+      // Slider stays at user's position
       densitySlider.value = density === null ? 0 : density;
+    }
+
+    if (resetBtn) {
+      resetBtn.style.display = density === null ? 'none' : 'inline-flex';
     }
   }
 
@@ -433,26 +528,110 @@
   function createSlider() {
     const container = document.createElement('div');
     container.id = 'vv-density-container';
-    container.title = 'Information Density';
-    const displayValue = density === null ? '_' : density;
+
+    // Always show average (with count), fallback to user's rating if no average
+    const displayRating = avgDensity !== null ? avgDensity : density;
+
+    // Build tooltip showing user's rating
+    let tooltipText = 'Information Density';
+    if (density !== null) {
+      tooltipText = `Your rating: ${density}`;
+    }
+
+    const hasRating = displayRating !== null;
+    // Show average with count: "7.2 (12)"
+    const countText = totalRatings > 0 ? ` (${totalRatings})` : '';
+    const displayValue = hasRating
+      ? displayRating + countText
+      : '<span class="no-rating" title="No ratings yet. Be the first to rate!">ⓘ</span>';
     const sliderValue = density === null ? 0 : density;
+
     container.innerHTML = `
       <span>📊</span>
-      <input type="range" id="vv-density-slider" min="0" max="10" value="${sliderValue}" title="Information Density">
-      <span id="vv-density-value">${displayValue}</span>
+      <div class="vv-slider-wrapper">
+        <input type="range" id="vv-density-slider" min="0" max="10" value="${sliderValue}" title="Slide to rate (0 to reset)">
+        <span class="vv-slider-tooltip" id="vv-slider-tooltip">${sliderValue > 0 ? sliderValue : ''}</span>
+      </div>
+      <span id="vv-density-value" title="${hasRating ? tooltipText : ''}">${displayValue}</span>
+      <button id="vv-density-reset" title="Reset your rating" style="display: ${density !== null ? 'inline-flex' : 'none'};">✕</button>
     `;
 
     const slider = container.querySelector('#vv-density-slider');
+    const sliderTooltip = container.querySelector('#vv-slider-tooltip');
+    const resetBtn = container.querySelector('#vv-density-reset');
+    const valueDisplay = container.querySelector('#vv-density-value');
+
+    // Update tooltip position based on slider value
+    function updateTooltipPosition(val) {
+      const percent = (val / 10) * 100;
+      sliderTooltip.style.left = `calc(${percent}% - ${(percent / 100) * 14}px)`;
+    }
+
+    // Initial tooltip position
+    if (sliderValue > 0) {
+      sliderTooltip.style.display = 'block';
+      updateTooltipPosition(sliderValue);
+    }
+
     slider.addEventListener('input', function(e) {
       e.stopPropagation();
-      density = parseInt(this.value);
-      document.getElementById('vv-density-value').textContent = density;
+      const val = parseInt(this.value);
+
+      // Update tooltip on thumb
+      if (val > 0) {
+        sliderTooltip.textContent = val;
+        sliderTooltip.style.display = 'block';
+        updateTooltipPosition(val);
+      } else {
+        sliderTooltip.style.display = 'none';
+      }
     });
 
     slider.addEventListener('change', function(e) {
       e.stopPropagation();
-      density = parseInt(this.value);
+      const val = parseInt(this.value);
+      if (val === 0) {
+        // Reset - slide to 0 clears the rating
+        density = null;
+        sliderTooltip.style.display = 'none';
+        resetBtn.style.display = 'none';
+      } else {
+        density = val;
+        resetBtn.style.display = 'inline-flex';
+      }
       saveData();
+
+      // After saving, reload from Firebase to get updated average
+      setTimeout(() => {
+        loadFromFirebase().then(firebaseData => {
+          if (firebaseData) {
+            avgDensity = firebaseData.avgDensity;
+            totalRatings = firebaseData.totalRatings;
+            updateUI();
+          }
+        });
+      }, 500);
+    });
+
+    // Reset button click handler
+    resetBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      density = null;
+      slider.value = 0;
+      sliderTooltip.style.display = 'none';
+      this.style.display = 'none';
+      saveData();
+
+      // After saving, reload from Firebase to get updated average
+      setTimeout(() => {
+        loadFromFirebase().then(firebaseData => {
+          if (firebaseData) {
+            avgDensity = firebaseData.avgDensity;
+            totalRatings = firebaseData.totalRatings;
+            updateUI();
+          }
+        });
+      }, 500);
     });
 
     return container;
@@ -524,6 +703,8 @@
       isClickbait = false;
       clickbaitCount = 0;
       density = null;
+      avgDensity = null;
+      totalRatings = 0;
     }
 
     addStyles();
