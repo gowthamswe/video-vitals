@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="#1a1a1a"/>
+
+  <!-- Play button triangle -->
+  <path d="M52 40 L52 88 L92 64 Z" fill="#ff6b35"/>
+
+  <!-- Pulse/heartbeat line -->
+  <polyline
+    points="10,64 30,64 38,64 44,40 50,88 56,50 62,78 68,64 98,64 118,64"
+    fill="none"
+    stroke="#ff6b35"
+    stroke-width="4"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.9"
+  />
+
+  <!-- Subtle border -->
+  <circle cx="64" cy="64" r="58" fill="none" stroke="#ff6b35" stroke-width="2" opacity="0.3"/>
+</svg>
