@@ -66,7 +66,8 @@
             api.storage.local.set({
               vv_user: userData,
               vv_user_id: userInfo.id,
-              vv_signed_in: true
+              vv_signed_in: true,
+              vv_access_token: token
             }, function() {
               showSignedIn(userData);
             });

@@ -111,11 +111,20 @@
     return userId;
   }
 
-  // Firebase REST API - Save rating (fire and forget)
-  function syncToFirebase(data) {
+  // Firebase REST API - Save rating with proper authentication
+  async function syncToFirebase(data) {
     if (!userId || !FIREBASE_PROJECT_ID || !FIREBASE_API_KEY) {
       console.log('[VideoVitals] Cannot sync - missing userId or Firebase config');
       return;
+    }
+
+    // Get the access token for authenticated requests
+    let accessToken = null;
+    try {
+      const tokenResult = await storageGet(['vv_access_token']);
+      accessToken = tokenResult.vv_access_token;
+    } catch (e) {
+      console.log('[VideoVitals] Could not get access token:', e);
     }
 
     const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/videos/${currentVideoId}/ratings/${userId}?key=${FIREBASE_API_KEY}`;
@@ -123,16 +132,23 @@
     const firestoreData = {
       fields: {
         videoId: { stringValue: currentVideoId },
-        userId: { stringValue: userId },
+        odId: { stringValue: userId },
         clickbaitFlag: { booleanValue: data.isClickbait },
         informationDensity: { integerValue: data.density !== null ? data.density : 0 },
         updatedAt: { timestampValue: new Date().toISOString() }
       }
     };
 
+    const headers = { 'Content-Type': 'application/json' };
+
+    // Add authorization header if we have an access token
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+
     fetch(url, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: headers,
       body: JSON.stringify(firestoreData)
     }).then(response => {
       if (response.ok) {
