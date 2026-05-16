@@ -163,33 +163,6 @@ body {
   accent-color: #065fd4;
 }
 
-.vv-support {
-  text-align: center;
-}
-
-.vv-support-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: #ffdd00;
-  color: #1a1a1a;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.vv-support-link:hover {
-  background: #ffe833;
-}
-
-.vv-support-note {
-  margin: 6px 0 0 0;
-  font-size: 11px;
-  opacity: 0.7;
-}
-
 .vv-footer {
   font-size: 11px;
   opacity: 0.75;
