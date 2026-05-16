@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "VideoVitals",
+  "version": "0.1.0",
+  "description": "Flag clickbait and rate information density on YouTube videos. See community ratings.",
+  "permissions": ["identity", "storage", "activeTab"],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://identitytoolkit.googleapis.com/*",
+    "https://securetoken.googleapis.com/*",
+    "https://firestore.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["src/content.js"],
+      "css": ["src/content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_title": "VideoVitals",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "oauth2": {
+    "client_id": "728301464934-hd7svsnuul48mvnsc4vcbjh1ekjnm4sm.apps.googleusercontent.com",
+    "scopes": ["openid", "email", "profile"]
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["src/content.css"],
+      "matches": ["https://www.youtube.com/*"]
+    }
+  ]
+}

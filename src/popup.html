@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>VideoVitals</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="vv-header">
+      <span class="vv-logo">▮▮</span>
+      <h1>VideoVitals</h1>
+    </header>
+
+    <section class="vv-card" id="auth-card">
+      <div class="vv-signed-out" id="signed-out">
+        <p>Sign in with Google to submit clickbait flags and density ratings.</p>
+        <button class="vv-btn vv-btn-primary" id="sign-in">Sign in with Google</button>
+      </div>
+
+      <div class="vv-signed-in" id="signed-in" hidden>
+        <div class="vv-profile">
+          <img id="avatar" alt="" />
+          <div class="vv-profile-text">
+            <div class="vv-name" id="name"></div>
+            <div class="vv-email" id="email"></div>
+          </div>
+        </div>
+        <button class="vv-btn" id="sign-out">Sign out</button>
+      </div>
+    </section>
+
+    <section class="vv-card vv-settings">
+      <h2>Settings</h2>
+      <label class="vv-toggle">
+        <input type="checkbox" id="overlay-toggle" checked />
+        <span>Show ratings on home / search thumbnails</span>
+      </label>
+    </section>
+
+    <section class="vv-card vv-help">
+      <h2>How to use</h2>
+      <ol>
+        <li>Open any YouTube video.</li>
+        <li>Use the <strong>🚩 Clickbait</strong> button on the video panel.</li>
+        <li>Drag the <strong>📊 Info density</strong> slider (1–10).</li>
+        <li>Community averages update as others rate.</li>
+      </ol>
+    </section>
+
+    <section class="vv-card vv-privacy">
+      <h2>Privacy</h2>
+      <p>
+        We store only your ratings and basic profile info (email, name) to identify
+        your votes. No browsing history or watch data is collected.
+      </p>
+    </section>
+
+    <section class="vv-card vv-support">
+      <a class="vv-support-link" href="https://ko-fi.com/videovitals" target="_blank" rel="noopener noreferrer">
+        ☕ Support VideoVitals
+      </a>
+      <p class="vv-support-note">Helps cover Firestore hosting if VideoVitals helps you out.</p>
+    </section>
+
+    <footer class="vv-footer">
+      <span id="status"></span>
+    </footer>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

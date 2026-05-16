@@ -1,0 +1,6 @@
+export const CONFIG = {
+  FIREBASE_PROJECT_ID: "video-vitals-dev",
+  FIREBASE_API_KEY: "AIzaSyCcsjdrVKKB9N79Xj96y3pgNINsxdRWdzg",
+  REQUEST_TIMEOUT_MS: 8000,
+  AVERAGE_REFRESH_MS: 30_000,
+};

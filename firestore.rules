@@ -1,0 +1,37 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isValidRating(data) {
+      let allowedKeys = ['clickbait', 'density', 'channelId', 'updatedAt'];
+      return data.keys().hasOnly(allowedKeys)
+        && (!('clickbait' in data) || data.clickbait is bool)
+        && (!('density' in data)
+            || (data.density is int && data.density >= 1 && data.density <= 10))
+        && (!('channelId' in data)
+            || (data.channelId is string && data.channelId.size() <= 64))
+        && data.updatedAt is timestamp;
+    }
+
+    match /videoRatings/{videoId}/users/{userId} {
+      // Reads are public so the overlay works for everyone, signed in or not.
+      // The data is non-sensitive aggregate community ratings.
+      allow read: if true;
+
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && isValidRating(request.resource.data);
+
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && isValidRating(request.resource.data);
+
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

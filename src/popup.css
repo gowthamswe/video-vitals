@@ -1,0 +1,198 @@
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  width: 320px;
+  margin: 0;
+  padding: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  background: #fafafa;
+  color: #111;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #181818;
+    color: #f1f1f1;
+  }
+}
+
+.vv-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.vv-header h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.vv-logo {
+  color: #cc0000;
+  letter-spacing: -2px;
+  font-weight: 800;
+}
+
+.vv-card {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .vv-card {
+    background: #232323;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.vv-card h2 {
+  font-size: 13px;
+  margin: 0 0 6px 0;
+}
+
+.vv-card p,
+.vv-card ol {
+  margin: 0 0 6px 0;
+  line-height: 1.45;
+}
+
+.vv-card ol {
+  padding-left: 18px;
+}
+
+.vv-card ol li {
+  margin-bottom: 2px;
+}
+
+.vv-btn {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.vv-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.vv-btn-primary {
+  background: #065fd4;
+  color: #fff;
+  border-color: #065fd4;
+}
+
+.vv-btn-primary:hover {
+  background: #0552bb;
+}
+
+@media (prefers-color-scheme: dark) {
+  .vv-btn {
+    background: #2c2c2c;
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+  .vv-btn:hover {
+    background: #353535;
+  }
+  .vv-btn-primary {
+    background: #3ea6ff;
+    color: #0b1220;
+    border-color: #3ea6ff;
+  }
+}
+
+.vv-signed-out p {
+  margin: 0 0 10px 0;
+}
+
+#sign-in {
+  width: 100%;
+}
+
+.vv-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.vv-profile img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #ddd;
+}
+
+.vv-name {
+  font-weight: 600;
+}
+
+.vv-email {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+#sign-out {
+  width: 100%;
+}
+
+.vv-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.vv-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: #065fd4;
+}
+
+.vv-support {
+  text-align: center;
+}
+
+.vv-support-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #ffdd00;
+  color: #1a1a1a;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.vv-support-link:hover {
+  background: #ffe833;
+}
+
+.vv-support-note {
+  margin: 6px 0 0 0;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.vv-footer {
+  font-size: 11px;
+  opacity: 0.75;
+  text-align: center;
+  min-height: 14px;
+}
