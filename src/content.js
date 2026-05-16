@@ -83,12 +83,12 @@
   }
 
   function findMountPoint() {
-    // Mount the panel as its own row just below the channel + action-buttons
-    // row (above the description). Stable across YouTube's redesigns.
+    // Mount inside the title row so the chips sit right-aligned next to the
+    // title (above the action row). CSS uses :has() to make the title flex
+    // when our panel is present, without breaking YouTube's default styling.
     return (
-      document.querySelector("ytd-watch-metadata #top-row") ||
-      document.querySelector("ytd-watch-metadata #actions")?.parentElement ||
-      document.querySelector("ytd-watch-metadata #title")
+      document.querySelector("ytd-watch-metadata #title") ||
+      document.querySelector("ytd-watch-metadata h1.ytd-watch-metadata")?.parentElement
     );
   }
 
@@ -101,11 +101,7 @@
     panel.id = PANEL_ID;
     panel.className = "vv-panel";
     panel.innerHTML = panelMarkup();
-    if (mount.parentNode) {
-      mount.parentNode.insertBefore(panel, mount.nextSibling);
-    } else {
-      mount.appendChild(panel);
-    }
+    mount.appendChild(panel);
     wirePanel(panel);
     return panel;
   }
@@ -113,14 +109,21 @@
   function panelMarkup() {
     return `
       <button class="vv-chip vv-flag" data-vv="flag" aria-pressed="false" title="Flag as clickbait" aria-label="Flag as clickbait">
-        <span class="vv-chip-icon">🚩</span>
-        <span class="vv-chip-count" data-vv="flag-count" aria-hidden="true">Flag</span>
+        <svg class="vv-chip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="6" y1="21" x2="6" y2="4"/>
+          <path d="M6 4h13l-3 4 3 4H6"/>
+        </svg>
+        <span class="vv-chip-count" data-vv="flag-count" aria-hidden="true"></span>
       </button>
 
       <div class="vv-density-wrap">
         <button class="vv-chip vv-density-trigger" data-vv="density-trigger" aria-expanded="false" title="Rate information density" aria-label="Rate information density">
-          <span class="vv-chip-icon">📊</span>
-          <span class="vv-chip-count" data-vv="density-display" aria-hidden="true">Rate</span>
+          <svg class="vv-chip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="6" y1="20" x2="6" y2="14"/>
+            <line x1="12" y1="20" x2="12" y2="10"/>
+            <line x1="18" y1="20" x2="18" y2="6"/>
+          </svg>
+          <span class="vv-chip-count" data-vv="density-display" aria-hidden="true"></span>
         </button>
 
         <div class="vv-density-popover" data-vv="density-popover" hidden>

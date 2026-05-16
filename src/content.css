@@ -1,9 +1,25 @@
+/* When our panel is inside the title container, lay it out as flex so the
+   title text takes the available space and the chips anchor to the right.
+   The :has() rule scopes this to only kick in when our panel is present,
+   leaving YouTube's default title styling untouched everywhere else. */
+ytd-watch-metadata #title:has(> #vv-panel) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+ytd-watch-metadata #title:has(> #vv-panel) > :not(#vv-panel) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 #vv-panel.vv-panel {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  margin: 4px 0 4px 0;
+  flex: 0 0 auto;
+  margin: 0;
   font-family: "Roboto", "Arial", sans-serif;
   color: var(--yt-spec-text-primary, #0f0f0f);
   position: relative;
@@ -14,15 +30,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 12px;
-  border-radius: 18px;
+  gap: 5px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 16px;
   border: none;
   background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.05));
   color: inherit;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
@@ -40,36 +56,29 @@
 }
 
 #vv-panel .vv-chip-icon {
-  font-size: 15px;
-  line-height: 1;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: inline-block;
 }
 
-/* The pill holds either a prompt ("Flag" / "Rate") or a number. Width is
-   sized for the prompts so numbers never cause the chip to shrink. */
+/* Fixed-width text slot (no inner pill background) so the chip never
+   resizes when content swaps between prompt ("Flag" / "Rate") and number. */
 #vv-panel .vv-chip-count {
   display: inline-block;
-  width: 48px;
-  padding: 1px 0;
-  border-radius: 999px;
-  font-size: 12px;
+  width: 36px;
+  font-size: 13px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-  text-align: center;
-  background: rgba(0, 0, 0, 0.08);
+  text-align: left;
   line-height: 1.5;
   box-sizing: border-box;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-#vv-panel .vv-flag[aria-pressed="true"] {
-  background: #ffe6e6;
-  color: #cc0000;
-}
 
-#vv-panel .vv-flag[aria-pressed="true"] .vv-chip-count:not(:empty) {
-  background: rgba(204, 0, 0, 0.18);
+#vv-panel .vv-flag[aria-pressed="true"] .vv-chip-icon {
+  fill: currentColor;
 }
 
 #vv-panel .vv-density-wrap {
@@ -257,21 +266,7 @@ html[dark] #vv-panel .vv-chip:hover,
   background: rgba(255, 255, 255, 0.18);
 }
 
-html[dark] #vv-panel .vv-chip-count:not(:empty),
-[dark] #vv-panel .vv-chip-count:not(:empty) {
-  background: rgba(255, 255, 255, 0.15);
-}
 
-html[dark] #vv-panel .vv-flag[aria-pressed="true"],
-[dark] #vv-panel .vv-flag[aria-pressed="true"] {
-  background: rgba(204, 0, 0, 0.25);
-  color: #ff8a8a;
-}
-
-html[dark] #vv-panel .vv-flag[aria-pressed="true"] .vv-chip-count:not(:empty),
-[dark] #vv-panel .vv-flag[aria-pressed="true"] .vv-chip-count:not(:empty) {
-  background: rgba(255, 138, 138, 0.25);
-}
 
 html[dark] #vv-panel .vv-density-popover,
 [dark] #vv-panel .vv-density-popover {
