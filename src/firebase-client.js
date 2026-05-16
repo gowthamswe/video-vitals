@@ -104,13 +104,14 @@ export async function getVideoStats(videoId) {
   const parent = `/videoRatings/${encodeURIComponent(videoId)}`;
   const fromClause = [{ collectionId: "users" }];
 
-  const [totalAndAvg, flagged] = await Promise.all([
+  // Each aggregation runs in its own query. Combining count() with avg(field)
+  // in a single aggregation query restricts count() to docs that have the
+  // averaged field — so a flagged-only doc with no density would be counted
+  // as 0, not 1.
+  const [totalQuery, flaggedQuery, avgQuery] = await Promise.all([
     runAggregation(parent, {
       structuredQuery: { from: fromClause },
-      aggregations: [
-        { alias: "total", count: {} },
-        { alias: "avgDensity", avg: { field: { fieldPath: "density" } } }
-      ]
+      aggregations: [{ alias: "total", count: {} }]
     }),
     runAggregation(parent, {
       structuredQuery: {
@@ -124,13 +125,17 @@ export async function getVideoStats(videoId) {
         }
       },
       aggregations: [{ alias: "flagged", count: {} }]
+    }),
+    runAggregation(parent, {
+      structuredQuery: { from: fromClause },
+      aggregations: [{ alias: "avgDensity", avg: { field: { fieldPath: "density" } } }]
     })
   ]);
 
   return {
-    totalRaters: readAggInt(totalAndAvg, "total"),
-    clickbaitCount: readAggInt(flagged, "flagged"),
-    averageDensity: readAggDouble(totalAndAvg, "avgDensity")
+    totalRaters: readAggInt(totalQuery, "total"),
+    clickbaitCount: readAggInt(flaggedQuery, "flagged"),
+    averageDensity: readAggDouble(avgQuery, "avgDensity")
   };
 }
 

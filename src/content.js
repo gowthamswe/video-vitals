@@ -435,54 +435,110 @@
       return null;
     }
 
-    function ensureBadge(anchor) {
-      let badge = anchor.querySelector(`:scope > .${BADGE_CLASS}`);
-      if (!badge) {
-        badge = document.createElement("div");
-        badge.className = BADGE_CLASS;
-        badge.dataset.state = "loading";
-        anchor.appendChild(badge);
-        // Force the parent to be a positioning context (YouTube usually sets this
-        // already, but not always).
-        if (getComputedStyle(anchor).position === "static") {
-          anchor.style.position = "relative";
-        }
-      }
-      return badge;
+    const FLAG_META_SVG = `<svg class="vv-meta-icon" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="21" x2="6" y2="4" fill="none"/><path d="M6 4h13l-3 4 3 4H6"/></svg>`;
+    const BARS_META_SVG = `<svg class="vv-meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" aria-hidden="true"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="6"/></svg>`;
+
+    function findTileForAnchor(anchor) {
+      return anchor.closest(
+        "ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer, ytd-grid-video-renderer, yt-lockup-view-model, ytd-reel-item-renderer, ytm-shorts-lockup-view-model-v2"
+      );
     }
 
-    function paintBadge(badge, stats) {
+    function findMetaRow(tile) {
+      if (!tile) return null;
+
+      // 1) Old Polymer DOM
+      const oldLine = tile.querySelector("#metadata-line");
+      if (oldLine) return oldLine;
+
+      // 2) New view-model DOM. The class is camelCase
+      // (ytContentMetadataViewModelMetadataRow), so we match case-
+      // insensitively to catch both the old kebab-case and new camelCase
+      // naming. There can be multiple rows (e.g. channel-name row first,
+      // then views/date row) — take the last one, which is views/date.
+      const rows = tile.querySelectorAll(
+        '[class*="metadatarow" i], [class*="metadata-row" i]'
+      );
+      if (rows.length) return rows[rows.length - 1];
+
+      return tile.querySelector('[class*="metadata-line"]');
+    }
+
+    function buildDelimiter() {
+      const span = document.createElement("span");
+      span.className = "ytContentMetadataViewModelDelimiter vv-meta-item";
+      span.textContent = "•";
+      return span;
+    }
+
+    function clearMetaItems(metaRow) {
+      metaRow.querySelectorAll(".vv-meta-item").forEach((el) => el.remove());
+    }
+
+    function buildMetaItem(svgHtml, value, titleText) {
+      const span = document.createElement("span");
+      // Include both old-style (inline-metadata-item) and our marker class
+      // (vv-meta-item) — the old class gives us free CSS delimiters on
+      // old-style rows, and the marker lets us clean up later.
+      span.className = "inline-metadata-item style-scope ytd-video-meta-block vv-meta-item";
+      span.title = titleText;
+      span.innerHTML = `${svgHtml}<span class="vv-meta-text">${value}</span>`;
+      return span;
+    }
+
+    function paintMetaRow(anchor, stats) {
+      const tile = findTileForAnchor(anchor);
+      if (!tile) {
+        log("paint: no tile found for anchor", anchor);
+        return;
+      }
+      const metaRow = findMetaRow(tile);
+      if (!metaRow) {
+        const candidates = [];
+        for (const el of tile.querySelectorAll("*")) {
+          const cls = typeof el.className === "string" ? el.className : "";
+          if (cls.toLowerCase().includes("metadata") || cls.toLowerCase().includes("meta-row")) {
+            candidates.push(`${el.tagName.toLowerCase()}.${cls}`);
+          }
+        }
+        log("paint: no meta row in tile", tile.tagName, "candidates:", candidates);
+        return;
+      }
+      log("paint: found meta row", metaRow);
+
+      clearMetaItems(metaRow);
+
       const total = stats?.totalRaters ?? 0;
-      const flagCount = stats?.clickbaitCount ?? 0;
-
       if (!stats || total < MIN_RATERS_FOR_BADGE) {
-        badge.dataset.state = "empty";
-        badge.innerHTML = "";
-        return;
-      }
-      if (total === 0 && DEBUG) {
-        badge.dataset.state = "shown";
-        badge.innerHTML = `<span class="vv-badge-pill vv-debug-pill" title="No community ratings yet (debug)">·</span>`;
+        log("paint: skipping (no community data)", { total, stats });
         return;
       }
 
+      const flagCount = stats.clickbaitCount ?? 0;
       const avg =
-        typeof stats.averageDensity === "number" ? String(Math.round(stats.averageDensity)) : null;
-      let html = "";
+        typeof stats.averageDensity === "number"
+          ? String(Math.round(stats.averageDensity))
+          : null;
 
+      // New-style rows use explicit delimiter spans between items rather
+      // than CSS-generated separators, so prepend a delimiter before each
+      // of our items in that case.
+      const needsExplicitDelimiter = !!metaRow.querySelector(
+        '[class*="elimiter" i]'
+      );
+
+      const items = [];
       if (flagCount >= 1) {
-        const flagClass =
-          flagCount >= 10 ? "vv-flag-high" : flagCount >= 5 ? "vv-flag-mid" : "vv-flag-low";
-        html += `<span class="vv-badge-pill ${flagClass}" title="${flagCount} flagged as clickbait">🚩 ${flagCount}</span>`;
+        items.push({ svg: FLAG_META_SVG, val: flagCount, title: `${flagCount} flagged as clickbait` });
       }
       if (avg) {
-        html += `<span class="vv-badge-pill vv-density-pill" title="Avg density (1-10)">📊 ${avg}</span>`;
+        items.push({ svg: BARS_META_SVG, val: avg, title: "Average information density" });
       }
-      if (!html && DEBUG) {
-        html = `<span class="vv-badge-pill vv-debug-pill" title="${total} rater(s), ${flagCount} flag(s)">·</span>`;
+      for (const item of items) {
+        if (needsExplicitDelimiter) metaRow.appendChild(buildDelimiter());
+        metaRow.appendChild(buildMetaItem(item.svg, item.val, item.title));
       }
-      badge.dataset.state = html ? "shown" : "empty";
-      badge.innerHTML = html;
+      log("paint: injected", { flagCount, avg, style: needsExplicitDelimiter ? "new" : "old" });
     }
 
     async function fetchAndPaint(anchor) {
@@ -490,18 +546,13 @@
       const vid = href ? videoIdFromHref(href) : null;
       if (!vid) return;
       log("fetch", vid);
-      const badge = ensureBadge(anchor);
       try {
         const stats = await statsCache.get(vid);
         if (!anchor.isConnected) return;
         log("paint", vid, stats);
-        paintBadge(badge, stats);
+        paintMetaRow(anchor, stats);
       } catch (e) {
         log("fetch-error", vid, e?.message);
-        badge.dataset.state = "error";
-        badge.innerHTML = DEBUG
-          ? `<span class="vv-badge-pill vv-debug-pill" title="${(e?.message || "error").replace(/"/g, "'")}">!</span>`
-          : "";
       }
     }
 
@@ -548,8 +599,8 @@
       log(`scan #${scanCount}: found ${anchors.length} thumbnail anchors, ${newCount} new`);
     }
 
-    function removeAllBadges() {
-      for (const b of document.querySelectorAll(`.${BADGE_CLASS}`)) b.remove();
+    function removeAllInjections() {
+      for (const el of document.querySelectorAll(".vv-meta-item")) el.remove();
     }
 
     function start() {
@@ -594,7 +645,7 @@
     function setEnabled(next) {
       enabled = next;
       log("overlay enabled =", enabled);
-      if (!enabled) removeAllBadges();
+      if (!enabled) removeAllInjections();
       else scheduleScan();
     }
 

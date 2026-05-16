@@ -3,7 +3,7 @@
   "name": "VideoVitals",
   "version": "0.1.0",
   "description": "Flag clickbait and rate information density on YouTube videos. See community ratings.",
-  "permissions": ["identity", "storage", "activeTab"],
+  "permissions": ["identity", "storage"],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://identitytoolkit.googleapis.com/*",
